@@ -421,38 +421,49 @@ const params=new URLSearchParams(window.location.search);
 const guestParam=params.get("guest");
 const isAdmin=!guestParam;
 
-// WISHES STORAGE (localStorage)
-const WISHES_KEY = "wedding_wishes_najiya_rafi";
+// WISHES STORAGE (Google Sheets via Apps Script)
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbyaAvSADNP8tnQ2izE3NBEpx1TfmLgG3KhWLni7FMSYA-2iQICwfRKKEFuiQk3HoWC0vA/exec";
 
-function getWishes() {
-  try { return JSON.parse(localStorage.getItem(WISHES_KEY) || "[]"); } catch(e) { return []; }
+async function getWishes() {
+  try {
+    const res = await fetch(SHEET_URL);
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch(e) { return []; }
 }
-function saveWish(guestName, text) {
-  const wishes = getWishes();
-  wishes.push({ guest: guestName, text: text, ts: Date.now() });
-  localStorage.setItem(WISHES_KEY, JSON.stringify(wishes));
+async function saveWish(guestName, text) {
+  try {
+    await fetch(SHEET_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ guest: guestName, text: text })
+    });
+  } catch(e) {}
 }
-function renderAdminWishes() {
+async function renderAdminWishes() {
   const list = document.getElementById("adminWishesList");
   if (!list) return;
-  const wishes = getWishes();
+  list.innerHTML = "<li><div class='wishes-empty'>Loading wishes…</div></li>";
+  const wishes = await getWishes();
   if (!wishes.length) { list.innerHTML = "<li><div class='wishes-empty'>No wishes received yet</div></li>"; return; }
-  list.innerHTML = wishes.map(w =>
-    "<li><div class='wish-guest'>" + esc(w.guest) + "</div><div class='wish-text'>" + esc(w.text) + "</div></li>"
+  list.innerHTML = wishes.slice().reverse().map(w =>
+    "<li><div class='wish-guest'>" + esc(String(w.guest||"Anonymous")) + "</div><div class='wish-text'>" + esc(String(w.text||"")) + "</div></li>"
   ).join("");
 }
-function sendWish() {
+async function sendWish() {
   const textarea = document.getElementById("wishTextarea");
   const nameInput = document.getElementById("wishName");
   const btn = document.getElementById("wishSendBtn");
   const sent = document.getElementById("wishesSent");
   const text = textarea.value.trim();
   if (!text) return;
+  btn.disabled = true;
+  btn.textContent = "Sending…";
   const typedName = nameInput ? nameInput.value.trim() : "";
   const urlName = guestParam ? decodeURIComponent(guestParam) : "";
   const name = typedName || urlName || "Anonymous";
-  saveWish(name, text);
-  const form = document.getElementById("wishesSection");
+  await saveWish(name, text);
   if (nameInput) nameInput.style.display = "none";
   textarea.style.display = "none";
   btn.style.display = "none";
@@ -509,7 +520,7 @@ function openInvite(){
   const base="https://calendar.google.com/calendar/render?action=TEMPLATE";
   const params=new URLSearchParams({
     text:"Wedding of Najiya & Rafi",
-    dates:"20260711T063000Z/20260711T103000Z",
+    dates:"20260711T063000Z/20260711T1103000Z",
     details:"You are cordially invited to the wedding reception of Najiya & Rafi.",
     location:"Kaningampuram House, Nagalikavu, Omassery"
   });
